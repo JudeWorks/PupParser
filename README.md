@@ -2,61 +2,166 @@
 
 PupParser is a specialized, in-browser CSV (Comma-Separated Values) editor designed to make data entry for specific applications easy and error-free. Instead of a generic spreadsheet, it provides a tailored user interface with context-aware inputs like dropdowns, date pickers, and format validation, ensuring the generated CSV data conforms to predefined schemas.
 
-The entire application runs locally in your web browser. No data is ever sent to a server.
+> **Note**: The entire application runs locally in your web browser. No data is ever sent to a server.
+
+---
 
 ## Key Features
 
--   **Create or Load CSVs**: Start with a fresh template for a known app or paste in existing CSV data to edit.
--   **Dynamic Editable Table**: Data is rendered in a clean, interactive table where every cell is an appropriate input field.
--   **Context-Aware Inputs**: The tool intelligently provides the best input type for the data:
-    -   **Dropdowns** for predefined choices (e.g., `type`, `Cache`, `Pinned`).
-    -   **Date Pickers** for calendar dates.
-    -   **Guided Time Selectors** for 24-hour time formats.
-    -   **Validated Inputs** for specific formats (e.g., URL paths, numeric-only fields).
-    -   **"Test Link"** helpers for all URL fields.
--   **Real-time CSV Output**: Any change made in the table is instantly reflected in the raw CSV output box.
--   **PickPup Spec Management**:
-    -   Dynamically add new `SpecGroup:SpecDetail` columns.
-    -   Toggle the visibility of entire column groups to focus on the data you need.
--   **Data Safety**: The app will warn you before you navigate away or close the tab if you have unsaved changes.
--   **Easy Exporting**:
-    -   **Copy CSV**: Copies the raw CSV output to your clipboard.
-    -   **Download CSV**: Downloads the data as a `.csv` file, intelligently named with the current date, time, and app name (e.g., `2023-11-28_1545-PupKit.csv`).
+- **Create or Load CSVs**\
+  Start with a fresh template for a known app or paste in existing CSV data to edit.
+
+- **Dynamic Editable Table**\
+  Data is rendered in a clean, interactive table where every cell is an appropriate input field.
+
+- **Context-Aware Inputs**\
+  The tool intelligently provides the best input type for the data:
+
+  - Dropdowns for predefined choices (e.g., `type`, `Cache`, `Pinned`)
+  - Date Pickers for calendar dates
+  - Guided Time Selectors for 24-hour time formats
+  - Validated Inputs for specific formats (e.g., URL paths, numeric-only fields)
+  - "Test Link" helpers for all URL fields
+
+- **Real-time CSV Output**\
+  Any change made in the table is instantly reflected in the raw CSV output box.
+
+- **PickPup Spec Management**
+
+  - Dynamically add new `SpecGroup:SpecDetail` columns
+  - Toggle the visibility of entire column groups to focus on the data you need
+
+- **Data Safety**
+
+  - The app warns you before navigating away or closing the tab if you have unsaved changes
+
+- **Easy Exporting**
+
+  - `Copy CSV`: Copies the raw CSV output to your clipboard
+  - `Download CSV`: Downloads the data as a `.csv` file with an intelligent name\
+    *(e.g., **`2023-11-28_1545-PupKit.csv`**)*
+
+---
 
 ## How to Use
 
-1.  **Open the File**: Simply open the `PupParser.html` file in any modern web browser.
+### 1. Open the File
 
-2.  **Getting Started**: You have two options:
-    -   **Create New**: Select an application (e.g., "PupKit", "PupCast") from the **Create New** dropdown. This will generate a blank table with the correct headers for that app.
-    -   **Load Existing**: Paste your raw CSV text into the **Paste CSV to Load** text area and click the **Load CSV** button.
+Open the `PupParser.html` file in any modern web browser.
 
-3.  **Editing Data**:
-    -   Click into any cell in the table to edit its content.
-    -   Use the specialized controls like date pickers and dropdowns to ensure your data is correctly formatted.
+### 2. Getting Started
 
-4.  **Managing Rows & Columns**:
-    -   Click the **Add Row** button at the bottom of the table to add a new, empty row.
-    -   Click the **Delete** button at the end of any row to remove it.
-    -   If you are working with a **PickPup** file, you can add new specification columns using the **Add Column** controls.
+You have two options:
 
-5.  **Filtering Columns (PickPup only)**:
-    -   When a PickPup file is loaded, a list of checkboxes for each `SpecGroup` will appear.
-    -   Uncheck a box to hide all columns belonging to that group.
-    -   Use the **Check All** and **Uncheck All** buttons for quick filtering.
+- **Create New**\
+  Select an application (e.g., `PupKit`, `PupCast`) from the *Create New* dropdown.
+- **Load Existing**\
+  Paste raw CSV text into the *Paste CSV to Load* text area and click `Load CSV`.
 
-6.  **Exporting Your Data**:
-    -   Click **Copy CSV** to copy the contents of the **Raw CSV Output** box.
-    -   Click **Download CSV** to save your work as a `.csv` file. This is considered a "save" action and will reset the "unsaved changes" warning.
+### 3. Editing Data
+
+- Click into any cell in the table to edit its content.
+- Use the specialized controls like date pickers and dropdowns for correct formatting.
+
+### 4. Managing Rows & Columns
+
+- `Add Row` button → adds a new, empty row.
+- `Delete` button (end of row) → removes the row.
+- For PickPup:
+  - Use `Add Column` controls to add spec columns.
+
+### 5. Filtering Columns (PickPup Only)
+
+- Checkboxes for each `SpecGroup` appear when a PickPup file is loaded.
+- Uncheck to hide entire groups.
+- Use `Check All` / `Uncheck All` for quick filtering.
+
+### 6. Exporting Your Data
+
+- `Copy CSV` → copies the raw CSV output.
+- `Download CSV` → saves your data as a `.csv` file and resets the "unsaved changes" warning.
+
+---
 
 ## App-Specific Rules & Headers
 
-The power of PupParser comes from its enforcement of app-specific rules. Here are the details for each app, including their required header format.
+PupParser enforces strict app-specific formats. Below are the rules and header requirements:
+
+---
 
 ### PickPup
--   **Column Format**: Supports flexible columns in the `SpecGroup:SpecDetail` format (e.g., `Color:Red`).
--   **Special Features**: This is the only app type that enables the "Add Column" controls and the "Spec Groups" visibility toggles.
 
-**Header:**
+- **Column Format**:\
+  `SpecGroup:SpecDetail` (e.g., `Color:Red`)
+- **Special Features**:
+  - Enables `Add Column` controls
+  - Enables `Spec Groups` visibility toggles
+
+**Header**:
+
 ```csv
 ItemName,HeroPhotoURL,Photo2URL,Photo3URL,Photo4URL,Photo5URL,Video1URL,Category1,Category2,Category3
+```
+
+---
+
+### PupCast
+
+- `type`: Dropdown (`photo`, `video`)
+- `duration`: Numeric-only
+- `start_date`, `end_date`: Date picker → `YYYY-MM-DD`
+- `start_time`, `end_time`:
+  - Dropdowns for `Hour (00–23)` and `Minute (00–59)`
+  - Displayed in 24-hour format with `PST` notice
+
+**Header**:
+
+```csv
+type,name,url,duration,trigger,start_date,end_date,start_time,end_time
+```
+
+---
+
+### PupKit
+
+- `location`: Text field that enforces leading `/`
+- `dateChanged`: Date picker → `MM-DD-YYYY`
+- `Cache`, `Pinned`: Dropdown (`yes`, `no`)
+
+**Header**:
+
+```csv
+name,location,url,dateChanged,Cache,Pinned,category,subcategory,tags
+```
+
+---
+
+### WildStream
+
+- `Type`: Dropdown (`photo`, `video`)
+- `DisplayDuration`: Numeric-only (only shown if `Type` is `photo`)
+
+**Header**:
+
+```csv
+Title,URL,Description,Type,DisplayDuration
+```
+
+---
+
+## Technical Overview
+
+- **Stack**:\
+  Built with **vanilla HTML, CSS, and JavaScript** (no frameworks)
+
+- **Dependencies**:\
+  Uses `PapaParse.js` for client-side CSV parsing
+
+- **Structure**:
+
+  - Application logic is encapsulated in an **IIFE (Immediately Invoked Function Expression)** to avoid polluting the global scope
+  - Organized into clear functions for:
+    - Rendering
+    - Data manipulation
+    - Event handling
+
