@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PupParser</title>
+  <style>
+    body { font-family: sans-serif; margin: 20px; display: flex; flex-direction: column; }
+    h1 { margin-bottom: 20px; }
+    .section { margin-bottom: 20px; }
+    label { font-weight: bold; margin-bottom: 5px; display: block; }
+    select, textarea, input, button { font-size: 1em; padding: 6px; margin-bottom: 10px; }
+    textarea { resize: vertical; width: 100%; }
+    input, select { box-sizing: border-box; }
+    #csvInput { width: 100%; height: 120px; }
+    #rawCsv { width: 100%; height: 150px; }
+    #specGroupToggles { display: none; }
+    #groupToggles { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+    #tableContainer { overflow-x: auto; margin-bottom: 10px; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #ccc; padding: 6px; vertical-align: top; }
+    .controls-inline { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
+    #newColGroup, #newColDetail { width: 150px; }
+    #bottomControls { margin-top: 10px; }
+    .url-link { margin-left: 8px; font-size: 0.9em; color: #0066cc; text-decoration: none; }
+    .url-link:hover { text-decoration: underline; }
+    #create-new-section {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    #create-new-section label {
+      margin-bottom: 0;
+      white-space: nowrap;
+    }
+    .timezone-notice {
+      margin-left: 5px;
+      font-size: 0.85em;
+      color: #555;
+    }
+  </style>
+</head>
+<body>
+  <h1>PupParser</h1>
+
+  <div id="create-new-section" class="section">
+    <label for="createNewApp">Create New:</label>
+    <select id="createNewApp">
+      <option value="">-- Select App --</option>
+      <option value="PupCast">PupCast</option>
+      <option value="WildStream">WildStream</option>
+      <option value="PickPup">PickPup</option>
+      <option value="PupKit">PupKit</option>
+    </select>
+  </div>
+
+  <div class="section">
+    <label for="csvInput">Paste CSV to Load:</label>
+    <textarea id="csvInput" placeholder="Paste your CSV here…"></textarea>
+    <button id="loadCsv">Load CSV</button>
+  </div>
+
+  <div id="specGroupToggles" class="section">
+    <label>PickPup Spec Groups (toggle to hide/show):</label>
+    <div class="controls-inline">
+      <button id="checkAllGroups">Check All</button>
+      <button id="uncheckAllGroups">Uncheck All</button>
+    </div>
+    <div id="groupToggles"></div>
+  </div>
+
+  <div id="tableControls" class="section" style="display:none;">
+    <div class="controls-inline">
+      <input type="text" id="newColGroup" placeholder="SpecGroup" />
+      <input type="text" id="newColDetail" placeholder="SpecDetail" />
+      <button id="addColumn">Add Column</button>
+    </div>
+  </div>
+
+  <div id="tableContainer" class="section"></div>
+
+  <div id="bottomControls" class="section" style="display:none;">
+    <button id="addRow">Add Row</button>
+  </div>
+
+  <div class="section">
+    <label for="rawCsv">Raw CSV Output:</label>
+    <textarea id="rawCsv" readonly placeholder="CSV will appear here…"></textarea>
+    <div class="controls-inline">
+      <button id="copyCsv">Copy CSV</button>
+      <button id="downloadCsv">Download CSV</button>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
+  <script>
+    const PupParser = (() => {
+      // Helper functions
+      function setColumnVisibility(idx, visible) {
+        document.querySelectorAll(`.col-${idx}`).forEach(el => el.style.display = visible ? '' : 'none');
+      }
+      function setGroupVisibility(group, visible) {
+        headers.forEach((h,i) => { if(h.startsWith(group+':')) setColumnVisibility(i,visible); });
+      }
+
+      const appSchemas = {
+        PupCast: ['type','name','url','duration','trigger','start_date','end_date','start_time','end_time'],
+        WildStream: ['Title','URL','Description','Type','DisplayDuration'],
+        PickPup: ['ItemName','HeroPhotoURL','Photo2URL','Photo3URL','Photo4URL','Photo5URL','Video1URL','Category1','Category2','Category3'],
+        PupKit: ['name','location','url','dateChanged','Cache','Pinned','category','subcategory','tags']
+      };
+      let headers = [], data = [];
+      let specGroupVisibility = {};
+      let isDirty = false;
+
+      // DOM refs
+      const createNewSelect = document.getElementById('createNewApp');
+      const csvInput = document.getElementById('csvInput');
+      const loadBtn = document.getElementById('loadCsv');
+      const specDiv = document.getElementById('specGroupToggles');
+      const togglesContainer = document.getElementById('groupToggles');
+      const checkAllBtn = document.getElementById('checkAllGroups');
+      const uncheckAllBtn = document.getElementById('uncheckAllGroups');
+      const tableControls = document.getElementById('tableControls');
+      const addRowBtn = document.getElementById('addRow');
+      const addColBtn = document.getElementById('addColumn');
+      const newColGroup = document.getElementById('newColGroup');
+      const newColDetail = document.getElementById('newColDetail');
+      const tableContainer = document.getElementById('tableContainer');
+      const bottomControls = document.getElementById('bottomControls');
+      const rawCsv = document.getElementById('rawCsv');
+      const copyBtn = document.getElementById('copyCsv');
+      const downloadBtn = document.getElementById('downloadCsv');
+
+      function detectApp() {
+        return Object.keys(appSchemas).find(app => {
+          const schema = appSchemas[app];
+          return headers.length >= schema.length && schema.every((h,i) => headers[i]===h);
+        });
+      }
+      
+      function markAsDirty() {
+        isDirty = true;
+      }
+
+      function renderGroupToggles(appType) {
+        togglesContainer.innerHTML = '';
+        if(appType!=='PickPup'){ specDiv.style.display='none'; return; }
+        specDiv.style.display='block';
+        const groups=[];
+        headers.forEach(h=>{ const p=h.split(':'); if(p.length===2&&!groups.includes(p[0]))groups.push(p[0]); });
+        
+        groups.forEach(g=>{
+          const label=document.createElement('label');
+          const cb=document.createElement('input'); cb.type='checkbox';
+          cb.checked = specGroupVisibility[g] !== false;
+          cb.dataset.group = g;
+          cb.addEventListener('change', (event) => {
+            const checkbox = event.target;
+            const group = checkbox.dataset.group;
+            const isVisible = checkbox.checked;
+            specGroupVisibility[group] = isVisible;
+            setGroupVisibility(group, isVisible);
+          });
+          label.appendChild(cb); label.append(` ${g}`);
+          togglesContainer.appendChild(label);
+        });
+        
+        checkAllBtn.onclick=()=>togglesContainer.querySelectorAll('input[type="checkbox"]').forEach(cb=>{
+          cb.checked=true;
+          const group = cb.dataset.group;
+          specGroupVisibility[group] = true;
+          setGroupVisibility(group, true);
+        });
+        uncheckAllBtn.onclick=()=>togglesContainer.querySelectorAll('input[type="checkbox"]').forEach(cb=>{
+          cb.checked=false;
+          const group = cb.dataset.group;
+          specGroupVisibility[group] = false;
+          setGroupVisibility(group, false);
+        });
+      }
+
+      function renderTable() {
+        tableContainer.innerHTML='';
+        const appType=detectApp();
+        renderGroupToggles(appType);
+        tableControls.style.display = (headers.length && appType === 'PickPup') ? 'block' : 'none';
+        bottomControls.style.display = headers.length ? 'block' : 'none';
+        if (headers.length === 0) return;
+
+        const table=document.createElement('table');
+        const thead=table.insertRow();
+        headers.forEach((h,idx)=>{
+          const th=document.createElement('th'); th.classList.add(`col-${idx}`);
+          th.textContent=h;
+          thead.appendChild(th);
+        });
+        thead.insertCell();
+
+        data.forEach((row,rIdx)=>{
+          const tr=table.insertRow();
+          headers.forEach((h,idx)=>{
+            const td=tr.insertCell(); td.classList.add(`col-${idx}`);
+            const wrapper=document.createElement('div'); wrapper.style.display='flex'; wrapper.style.alignItems='center';
+            const defaultOnChange = e => { row[h] = e.target.value; updateRawCsv(); markAsDirty(); };
+            
+            if(appType==='PupCast'&&h==='type'){
+              const sel=document.createElement('select'); sel.appendChild(new Option('',''));
+              ['photo','video'].forEach(opt=>{ const o=new Option(opt.charAt(0).toUpperCase()+opt.slice(1),opt); if(row[h]===opt)o.selected=true; sel.appendChild(o); });
+              sel.onchange=defaultOnChange;
+              wrapper.appendChild(sel);
+            }
+            else if (appType === 'PupCast' && (h === 'start_date' || h === 'end_date')) {
+                const inp = document.createElement('input');
+                inp.type = 'date';
+                inp.value = row[h] || '';
+                inp.onchange = defaultOnChange;
+                wrapper.appendChild(inp);
+            }
+            // /* REVISED: PupCast time inputs are now guided dropdowns. */
+            else if (appType === 'PupCast' && (h === 'start_time' || h === 'end_time')) {
+                const [currentHour, currentMinute] = (row[h] || '').split(':');
+
+                const hourSelect = document.createElement('select');
+                hourSelect.className = 'hour-select';
+                hourSelect.add(new Option('--', ''));
+                for (let i = 0; i < 24; i++) {
+                    const hour = String(i).padStart(2, '0');
+                    const opt = new Option(hour, hour);
+                    if (hour === currentHour) opt.selected = true;
+                    hourSelect.add(opt);
+                }
+
+                const minuteSelect = document.createElement('select');
+                minuteSelect.className = 'minute-select';
+                minuteSelect.add(new Option('--', ''));
+                for (let i = 0; i < 60; i++) {
+                    const minute = String(i).padStart(2, '0');
+                    const opt = new Option(minute, minute);
+                    if (minute === currentMinute) opt.selected = true;
+                    minuteSelect.add(opt);
+                }
+
+                const timeOnChange = () => {
+                    const newHour = hourSelect.value;
+                    const newMinute = minuteSelect.value;
+                    if (newHour && newMinute) {
+                        row[h] = `${newHour}:${newMinute}`;
+                    } else {
+                        row[h] = '';
+                    }
+                    updateRawCsv();
+                    markAsDirty();
+                };
+
+                hourSelect.onchange = timeOnChange;
+                minuteSelect.onchange = timeOnChange;
+
+                wrapper.appendChild(hourSelect);
+                wrapper.appendChild(document.createTextNode(':'));
+                wrapper.appendChild(minuteSelect);
+                
+                const notice = document.createElement('span');
+                notice.className = 'timezone-notice';
+                notice.textContent = '(PST)';
+                wrapper.appendChild(notice);
+            }
+            else if(appType==='WildStream'&&h==='Type'){
+              const sel=document.createElement('select'); sel.appendChild(new Option('',''));
+              ['photo','video'].forEach(opt=>{ const o=new Option(opt.charAt(0).toUpperCase()+opt.slice(1),opt); if(row[h]&&row[h].toLowerCase()===opt)o.selected=true; sel.appendChild(o); });
+              sel.onchange=e=>{ row[h]=e.target.value; renderTable(); updateRawCsv(); markAsDirty(); };
+              wrapper.appendChild(sel);
+            }
+            else if(appType==='WildStream'&&h==='DisplayDuration'){
+              if((row['Type']||'').toLowerCase()!=='video'){
+                const inp=document.createElement('input'); inp.type='number'; inp.min='0'; inp.value=row[h]||'';
+                inp.oninput=e=>{ e.target.value=e.target.value.replace(/\D/g,''); row[h]=e.target.value; updateRawCsv(); markAsDirty(); };
+                wrapper.appendChild(inp);
+              }
+            }
+            else if (appType === 'PupKit' && (h === 'Cache' || h === 'Pinned')) {
+                const sel = document.createElement('select');
+                ['', 'yes', 'no'].forEach(opt => {
+                    const o = new Option(opt.charAt(0).toUpperCase() + opt.slice(1), opt);
+                    if ((row[h]||'').toLowerCase() === opt) o.selected = true;
+                    sel.appendChild(o);
+                });
+                sel.onchange = defaultOnChange;
+                wrapper.appendChild(sel);
+            }
+            else if (appType === 'PupKit' && h === 'location') {
+                const inp = document.createElement('input');
+                inp.value = row[h] || '/';
+                inp.oninput = e => {
+                    let value = e.target.value;
+                    if (!value.startsWith('/')) { value = '/' + value; }
+                    e.target.value = value.replace(/^\/+/, '/');
+                    row[h] = e.target.value;
+                    updateRawCsv();
+                    markAsDirty();
+                };
+                wrapper.appendChild(inp);
+            }
+            else if (appType === 'PupKit' && h === 'dateChanged') {
+                const inp = document.createElement('input');
+                inp.type = 'date';
+                const dateParts = (row[h] || '').split('-');
+                if (dateParts.length === 3 && dateParts[2].length === 4) {
+                    inp.value = `${dateParts[2]}-${dateParts[0]}-${dateParts[1]}`;
+                }
+                inp.onchange = e => {
+                    if (e.target.value) {
+                        const newDateParts = e.target.value.split('-');
+                        row[h] = `${newDateParts[1]}-${newDateParts[2]}-${newDateParts[0]}`;
+                    } else {
+                        row[h] = '';
+                    }
+                    updateRawCsv();
+                    markAsDirty();
+                };
+                wrapper.appendChild(inp);
+            }
+            else {
+              const inp=document.createElement('input');
+              if (appType === 'PupCast' && h === 'duration') {
+                inp.type = 'number';
+                inp.min = '0';
+              }
+              inp.value=row[h]||'';
+              inp.onchange=defaultOnChange;
+              wrapper.appendChild(inp);
+              if(h.toLowerCase().includes('url')){
+                const link=document.createElement('a'); link.className='url-link'; link.textContent='Test Link';
+                link.href=row[h]||''; link.target='_blank'; wrapper.appendChild(link);
+              }
+            }
+            td.appendChild(wrapper);
+          });
+          const delTd=tr.insertCell(); const delBtn=document.createElement('button'); delBtn.textContent='Delete';
+          delBtn.onclick=()=>{ data.splice(rIdx,1); renderTable(); updateRawCsv(); markAsDirty(); };
+          delTd.appendChild(delBtn);
+        });
+        tableContainer.appendChild(table);
+
+        Object.keys(specGroupVisibility).forEach(group => {
+            if (specGroupVisibility[group] === false) {
+                setGroupVisibility(group, false);
+            }
+        });
+      }
+
+      function updateRawCsv(){ rawCsv.value=headers.length?Papa.unparse({fields:headers,data}):''; }
+
+      function init(csvText){
+        specGroupVisibility = {};
+        if(!csvText.trim()){
+          headers=[];
+          data=[];
+          isDirty = false;
+        } else {
+          const res=Papa.parse(csvText.trim(),{header:true,skipEmptyLines:true});
+          headers=res.meta.fields;
+          data=res.data;
+          isDirty = true;
+        }
+        renderTable();
+        updateRawCsv();
+      }
+
+      createNewSelect.onchange=()=>{
+        const app=createNewSelect.value;
+        if(appSchemas[app]){
+          const s=appSchemas[app];
+          init(s.join(',')+'\n'+s.map(_=>'').join(','));
+        } else {
+          init('');
+        }
+      };
+      loadBtn.onclick=()=>init(csvInput.value.trim());
+      addRowBtn.onclick=()=>{ if(!headers.length)return; const row={}; headers.forEach(h=>row[h]=''); data.push(row); renderTable(); updateRawCsv(); markAsDirty(); };
+      addColBtn.onclick=()=>{ const g=newColGroup.value.trim(),d=newColDetail.value.trim(); if(!g||!d)return alert('Enter both SpecGroup and SpecDetail'); const name=`${g}:${d}`; if(headers.includes(name))return alert('Column exists'); headers.push(name); data.forEach(r=>r[name]=''); newColGroup.value=''; newColDetail.value=''; renderTable(); updateRawCsv(); markAsDirty(); };
+      copyBtn.onclick=()=>navigator.clipboard.writeText(rawCsv.value);
+      
+      downloadBtn.onclick = () => {
+        if (!rawCsv.value) return;
+        const appName = detectApp() || 'data';
+        const now = new Date();
+        const date = now.toISOString().split('T')[0];
+        const hour = String(now.getHours()).padStart(2, '0');
+        const minute = String(now.getMinutes()).padStart(2, '0');
+        const filename = `${date}_${hour}${minute}-${appName}.csv`;
+        const blob = new Blob([rawCsv.value], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        const url = URL.createObjectURL(blob);
+        link.setAttribute("href", url);
+        link.setAttribute("download", filename);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        isDirty = false;
+      };
+      
+      window.addEventListener('beforeunload', (event) => {
+        if (isDirty) {
+          event.preventDefault();
+          event.returnValue = '';
+        }
+      });
+
+      return { init };
+    })();
+    PupParser.init('');
+    
+    (() => {
+        const select = document.getElementById('createNewApp');
+        const options = Array.from(select.options);
+        const firstOption = options.shift();
+        options.sort((a, b) => a.text.localeCompare(b.text));
+        select.innerHTML = '';
+        select.appendChild(firstOption);
+        options.forEach(option => select.appendChild(option));
+    })();
+  </script>
+</body>
+</html>
